@@ -8,11 +8,10 @@ const session = require("express-session");
 const jwt = require("jsonwebtoken");
 const multer = require('multer');
 const { getStorage } = require('firebase-admin/storage');
-const nodemailer = require('nodemailer');
-const fs = require('fs');
 require('dotenv').config();
+// const { setupMobileSupport } = require('./mobile-backend-setup');
 
-// Firebase Admin Setup
+// Load service account from environment variable or fallback to serviceAccountKey.json
 let serviceAccount;
 if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
   try {
@@ -29,59 +28,40 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
     process.exit(1);
   }
 }
-
 const admin = require("firebase-admin");
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://volunteerhub-9ae56.firebaseio.com",
-  storageBucket: "volunteerhub-9ae56.appspot.com"
+  databaseURL: "https://volunteerhub-9ae56.firebaseio.com"
 });
 
 const db = admin.firestore();
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware Setup
+// After initializing Firebase and before your existing routes:
+// setupMobileSupport(app, admin, db);
+
+// CORS Configuration for Backend API
 app.use(cors({
   origin: [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
-    "http://127.0.0.1:3000",
     "http://localhost:3000",
-    "http://127.0.0.1:3001",
-    "http://localhost:3001",
     "https://neighborhood-liard.vercel.app",
-    "https://neighborhood-1bs9w1ohe-aeresals-projects.vercel.app"
+    "https://neighborhood-1bs9w1ohe-aeresals-projects.vercel.app",
+    "https://volunteerhub.saitrseelam.com"
   ],
   credentials: true,
   methods: ["GET", "POST", "DELETE", "PUT", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-// Add debugging middleware RIGHT AFTER CORS
-app.use((req, res, next) => {
-  console.log(`📝 ${req.method} ${req.path} - Origin: ${req.get('Origin') || 'none'}`);
-  console.log('Headers:', {
-    'content-type': req.get('content-type'),
-    'authorization': req.get('authorization') ? 'Bearer ***' : 'none',
-    'content-length': req.get('content-length') || '0'
-  });
-  
-  // Log raw body for debugging
-  if (req.method === 'POST' || req.method === 'PUT') {
-    console.log('Raw body type:', typeof req.body);
-    console.log('Body keys:', req.body ? Object.keys(req.body) : 'no body');
-    if (req.body && Object.keys(req.body).length > 0) {
-      console.log('Body content:', JSON.stringify(req.body, null, 2));
-    }
-  }
-  
-  next();
-});
-
 app.use(express.json());
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, "public")));
+
+// Add session middleware for signature forms only
 app.use(session({
   secret: process.env.SESSION_SECRET || "volunteerhub_secret",
   resave: false,
@@ -89,19 +69,151 @@ app.use(session({
   cookie: { secure: false, httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 
-// Multer configuration for file uploads
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith('image/')) {
-      return cb(new Error('Only image files are allowed!'));
+// API Health Check
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "healthy", 
+    timestamp: new Date().toISOString(),
+    service: "VolunteerHub Backend API"
+  });
+});
+
+// Serve static files for testing interface only
+app.use('/test', express.static(path.join(__dirname, "test")));
+
+// Serve Homepage (redirect to API documentation)
+app.get("/", (req, res) => {
+  res.json({
+    message: "VolunteerHub Backend API",
+    version: "1.0.0",
+    endpoints: {
+      "health": "GET /api/health",
+      "auth": {
+        "signup": "POST /signup",
+        "login": "POST /login", 
+        "logout": "POST /logout",
+        "validate": "GET /validate-session"
+      },
+      "users": {
+        "get": "GET /users",
+        "update": "PUT /users"
+      },
+      "activities": {
+        "get": "GET /activities/:username",
+        "add": "POST /activities",
+        "delete": "DELETE /activities/:id"
+      },
+      "community": {
+        "posts": "GET|POST|DELETE /api/community-posts",
+        "friends": "GET|POST /api/friends"
+      },
+      "testing": "GET /test for API testing interface"
     }
-    cb(null, true);
+  });
+});
+
+// Signup Route
+app.post("/signup", async (req, res) => {
+  try {
+    const { firstName, lastName, email, phoneNumber, username, password, zipCode } = req.body;
+
+    if (!firstName || !lastName || !email || !username || !password) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // Ensure phoneNumber is never undefined
+    const safePhoneNumber = typeof phoneNumber === "undefined" ? "" : phoneNumber;
+
+    // Check if username exists
+    const userRef = db.collection("users").doc(username);
+    const userDoc = await userRef.get();
+    if (userDoc.exists) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    // Check if email exists
+    const emailQuery = await db.collection("users").where("email", "==", email).get();
+    if (!emailQuery.empty) {
+      return res.status(400).json({ message: "Email already registered" });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const userID = uuidv4();
+
+    // Create user object
+    const newUser = {
+      userID,
+      firstName,
+      lastName,
+      email,
+      phoneNumber: safePhoneNumber,
+      zipCode,
+      password: hashedPassword
+    };
+
+    // Add to 'users' collection
+    await db.collection("users").doc(username).set(newUser);
+
+    // Add to 'userData' collection
+    const userData = {
+      name: `${firstName} ${lastName}`,
+      email,
+      preferences: {},
+      activities: []
+    };
+    await db.collection("userData").doc(userID).set(userData);
+
+    res.status(201).json({ message: "User registered successfully", userID });
+  } catch (error) {
+    console.error("Signup error", error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// Authentication Middleware
+// Login Route
+app.post("/login", async (req, res) => {
+  try {
+    const { username, password, rememberMe } = req.body;
+    let user;
+    // Get user from 'users' collection
+    const userRef = db.collection("users").doc(username);
+    const userDoc = await userRef.get();
+    if (userDoc.exists) {
+      user = userDoc.data();
+    }
+    if (!user) return res.status(401).json({ message: "User does not exist" });
+    // Check hashed password
+    if (!(await bcrypt.compare(password, user.password))) return res.status(401).json({ message: "Incorrect password" });
+    // Generate JWT token
+    const token = jwt.sign({ userID: user.userID, username }, process.env.JWT_SECRET || "volunteerhub_jwt_secret", { expiresIn: "7d" });
+    res.status(200).json({ message: "Login successful", userID: user.userID, username, token });
+  } catch (error) {
+    console.error("Login error", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// Token validation endpoint
+app.get("/validate-session", (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.status(400).json({ valid: false, message: "Token missing" });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "volunteerhub_jwt_secret");
+    res.status(200).json({ valid: true, userID: decoded.userID, username: decoded.username });
+  } catch (error) {
+    res.status(401).json({ valid: false, message: "Invalid or expired token" });
+  }
+});
+
+// Logout Route
+app.post("/logout", (req, res) => {
+  res.clearCookie("username");
+  req.session.destroy();
+  res.status(200).json({ message: "Logged out successfully" });
+});
+
+// Middleware to extract user from JWT (for API endpoints)
 function authenticateJWT(req, res, next) {
   let token = null;
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
@@ -120,274 +232,7 @@ function authenticateJWT(req, res, next) {
   }
 }
 
-// Utility Functions
-async function ensureActivityIdsForUser(username) {
-  const activitiesRef = db.collection('activities').doc(username);
-  const doc = await activitiesRef.get();
-  if (!doc.exists) return;
-  let activitiesArr = doc.data().activities || [];
-  let changed = false;
-  activitiesArr = activitiesArr.map(act => {
-    if (!act.id) {
-      changed = true;
-      return { ...act, id: uuidv4() };
-    }
-    return act;
-  });
-  if (changed) {
-    await activitiesRef.set({ activities: activitiesArr }, { merge: true });
-  }
-}
-
-// Routes
-app.get("/", (req, res) => {
-  res.json({ 
-    message: "VolunteerHub Backend API", 
-    version: "1.0.0",
-    status: "running",
-    endpoints: [
-      "POST /signup",
-      "POST /login", 
-      "GET /validate-session",
-      "POST /logout",
-      "POST /activities",
-      "GET /activities/:username",
-      "DELETE /activities/:id",
-      "GET /users",
-      "GET /leaderboard",
-      "GET /api/community-posts",
-      "POST /api/community-posts",
-      "GET /api/friends/search",
-      "POST /api/friends/add",
-      "GET /themes",
-      "POST /themes",
-      "GET /api/mapbox-key"
-    ]
-  });
-});
-
-// Add test endpoint after the root route
-app.get("/test", (req, res) => {
-  res.json({ 
-    message: "Test endpoint working!",
-    timestamp: new Date().toISOString(),
-    method: req.method,
-    path: req.path
-  });
-});
-
-// Add Firebase connectivity test endpoint
-app.get("/test-firebase", async (req, res) => {
-  try {
-    console.log("🔥 Testing Firebase connectivity...");
-    
-    // Test 1: Check if Firebase Admin is initialized
-    const app = admin.app();
-    console.log("✅ Firebase Admin SDK initialized:", app.name);
-    
-    // Test 2: Test Firestore connection
-    const testDoc = db.collection('_test').doc('connectivity');
-    const timestamp = new Date().toISOString();
-    
-    // Try to write to Firestore
-    await testDoc.set({
-      message: "Firebase connectivity test",
-      timestamp: timestamp,
-      status: "connected"
-    });
-    console.log("✅ Firestore write test successful");
-    
-    // Try to read from Firestore
-    const doc = await testDoc.get();
-    const data = doc.data();
-    console.log("✅ Firestore read test successful:", data);
-    
-    // Test 3: Test Firebase Storage (optional)
-    let storageStatus = "not tested";
-    try {
-      const bucket = getStorage().bucket();
-      const bucketName = bucket.name;
-      storageStatus = `connected to bucket: ${bucketName}`;
-      console.log("✅ Firebase Storage accessible:", bucketName);
-    } catch (storageError) {
-      storageStatus = `error: ${storageError.message}`;
-      console.warn("⚠️ Firebase Storage test failed:", storageError.message);
-    }
-    
-    // Clean up test document
-    await testDoc.delete();
-    console.log("🧹 Cleaned up test document");
-    
-    res.json({
-      status: "success",
-      message: "Firebase connectivity test passed",
-      results: {
-        admin: "initialized",
-        firestore: "connected",
-        storage: storageStatus,
-        timestamp: timestamp
-      },
-      firebase_project: serviceAccount.project_id,
-      database_url: "https://volunteerhub-9ae56.firebaseio.com"
-    });
-    
-  } catch (error) {
-    console.error("❌ Firebase connectivity test failed:", error);
-    
-    res.status(500).json({
-      status: "error",
-      message: "Firebase connectivity test failed",
-      error: {
-        name: error.name,
-        message: error.message,
-        code: error.code || "unknown",
-        details: error.details || "no additional details"
-      },
-      troubleshooting: {
-        check_service_account: "Verify serviceAccountKey.json is valid",
-        check_firestore: "Ensure Firestore is enabled in Firebase Console",
-        check_rules: "Verify Firestore security rules allow operations",
-        check_network: "Ensure server can reach Firebase services"
-      }
-    });
-  }
-});
-
-// Test specific Firebase collections
-app.get("/test-collections", async (req, res) => {
-  try {
-    console.log("📋 Testing Firebase collections...");
-    
-    const collections = ['users', 'userData', 'activities', 'communityPosts', 'themes'];
-    const results = {};
-    
-    for (const collectionName of collections) {
-      try {
-        const snapshot = await db.collection(collectionName).limit(1).get();
-        results[collectionName] = {
-          status: "accessible",
-          exists: !snapshot.empty,
-          documentCount: snapshot.size
-        };
-        console.log(`✅ Collection '${collectionName}': ${snapshot.size} documents`);
-      } catch (error) {
-        results[collectionName] = {
-          status: "error",
-          error: error.message
-        };
-        console.error(`❌ Collection '${collectionName}' error:`, error.message);
-      }
-    }
-    
-    res.json({
-      status: "success",
-      message: "Collection accessibility test completed",
-      collections: results,
-      timestamp: new Date().toISOString()
-    });
-    
-  } catch (error) {
-    console.error("❌ Collection test failed:", error);
-    res.status(500).json({
-      status: "error",
-      message: "Collection test failed",
-      error: error.message
-    });
-  }
-});
-
-// Authentication Routes
-app.post("/signup", async (req, res) => {
-  try {
-    const { firstName, lastName, email, phoneNumber, username, password, zipCode } = req.body;
-
-    if (!firstName || !lastName || !email || !username || !password) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
-
-    const safePhoneNumber = typeof phoneNumber === "undefined" ? "" : phoneNumber;
-
-    // Check if username exists
-    const userRef = db.collection("users").doc(username);
-    const userDoc = await userRef.get();
-    if (userDoc.exists) {
-      return res.status(400).json({ message: "Username already exists" });
-    }
-
-    // Check if email exists
-    const emailQuery = await db.collection("users").where("email", "==", email).get();
-    if (!emailQuery.empty) {
-      return res.status(400).json({ message: "Email already registered" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const userID = uuidv4();
-
-    const newUser = {
-      userID,
-      firstName,
-      lastName,
-      email,
-      phoneNumber: safePhoneNumber,
-      zipCode,
-      password: hashedPassword
-    };
-
-    await db.collection("users").doc(username).set(newUser);
-
-    const userData = {
-      name: `${firstName} ${lastName}`,
-      email,
-      preferences: {},
-      activities: []
-    };
-    await db.collection("userData").doc(userID).set(userData);
-
-    res.status(201).json({ message: "User registered successfully", userID });
-  } catch (error) {
-    console.error("Signup error", error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-app.post("/login", async (req, res) => {
-  try {
-    const { username, password, rememberMe } = req.body;
-    let user;
-    const userRef = db.collection("users").doc(username);
-    const userDoc = await userRef.get();
-    if (userDoc.exists) {
-      user = userDoc.data();
-    }
-    if (!user) return res.status(401).json({ message: "User does not exist" });
-    if (!(await bcrypt.compare(password, user.password))) return res.status(401).json({ message: "Incorrect password" });
-    
-    const token = jwt.sign({ userID: user.userID, username }, process.env.JWT_SECRET || "volunteerhub_jwt_secret", { expiresIn: "7d" });
-    res.status(200).json({ message: "Login successful", userID: user.userID, username, token });
-  } catch (error) {
-    console.error("Login error", error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-app.get("/validate-session", (req, res) => {
-  const { token } = req.query;
-  if (!token) return res.status(400).json({ valid: false, message: "Token missing" });
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "volunteerhub_jwt_secret");
-    res.status(200).json({ valid: true, userID: decoded.userID, username: decoded.username });
-  } catch (error) {
-    res.status(401).json({ valid: false, message: "Invalid or expired token" });
-  }
-});
-
-app.post("/logout", (req, res) => {
-  res.clearCookie("username");
-  req.session.destroy();
-  res.status(200).json({ message: "Logged out successfully" });
-});
-
-// Activity Routes
+// Get Activities Route (JWT protected)
 app.get('/get-activities', authenticateJWT, async (req, res) => {
   try {
     const userDataRef = db.collection('userData').doc(req.userID);
@@ -401,9 +246,11 @@ app.get('/get-activities', authenticateJWT, async (req, res) => {
   }
 });
 
+// Add Activity Route (JWT protected)
 app.post('/add-activity', authenticateJWT, async (req, res) => {
   try {
     const { title, place, activityDate, startTime, endTime, supervisorName, supervisorEmail } = req.body;
+    // Add activity to userData
     const userDataRef = db.collection('userData').doc(req.userID);
     const userDataDoc = await userDataRef.get();
     if (!userDataDoc.exists) return res.status(404).json({ message: 'User data not found' });
@@ -426,6 +273,7 @@ app.post('/add-activity', authenticateJWT, async (req, res) => {
   }
 });
 
+// Add Activity to 'activities' collection, one document per user (JWT protected)
 app.post('/activities', authenticateJWT, async (req, res) => {
   try {
     console.log('POST /activities incoming body:', req.body);
@@ -434,7 +282,7 @@ app.post('/activities', authenticateJWT, async (req, res) => {
       console.error('Missing required activity fields', req.body);
       return res.status(400).json({ message: 'Missing required activity fields' });
     }
-    
+    // The document name is the username
     const activitiesRef = db.collection('activities').doc(req.username);
     const doc = await activitiesRef.get();
     let activitiesArr = [];
@@ -443,7 +291,7 @@ app.post('/activities', authenticateJWT, async (req, res) => {
       activitiesArr = data.activities || [];
     }
     const newActivity = {
-      id: uuidv4(),
+      id: uuidv4(), // Add unique id to each activity
       name,
       date,
       start_time,
@@ -451,7 +299,7 @@ app.post('/activities', authenticateJWT, async (req, res) => {
       location,
       supervisorName,
       supervisorEmail,
-      approved: false
+      approved: false // Always set approved property for new activities
     };
     activitiesArr.push(newActivity);
     await activitiesRef.set({ activities: activitiesArr }, { merge: true });
@@ -462,6 +310,34 @@ app.post('/activities', authenticateJWT, async (req, res) => {
   }
 });
 
+// Get current user info (JWT protected)
+app.get('/users', authenticateJWT, async (req, res) => {
+  try {
+    const userRef = db.collection('users').doc(req.username);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) return res.status(404).json({});
+    const userData = userDoc.data();
+    // Remove sensitive info
+    if (userData && userData.password) delete userData.password;
+
+    // Fetch activities created by this user from userData
+    const userDataRef = db.collection('userData').doc(req.userID);
+    const userDataDoc = await userDataRef.get();
+    let activities = [];
+    if (userDataDoc.exists) {
+      const userDataObj = userDataDoc.data();
+      activities = userDataObj.activities || [];
+    }
+    userData.activities = activities;
+
+    res.status(200).json(userData);
+  } catch (error) {
+    console.error('Get user info error', error);
+    res.status(500).json({});
+  }
+});
+
+// Get activities for a user from the 'activities' collection (JWT protected)
 app.get('/activities/:username', authenticateJWT, async (req, res) => {
   try {
     const { username } = req.params;
@@ -476,32 +352,12 @@ app.get('/activities/:username', authenticateJWT, async (req, res) => {
   }
 });
 
-app.delete('/activities/:id', authenticateJWT, async (req, res) => {
-  const activityId = req.params.id;
-  if (!activityId) {
-    return res.status(400).json({ message: 'Activity ID is required.' });
-  }
-  try {
-    await ensureActivityIdsForUser(req.username);
-    const activitiesRef = db.collection('activities').doc(req.username);
-    const doc = await activitiesRef.get();
-    if (!doc.exists) {
-      return res.status(404).json({ message: 'No activities found for user.' });
-    }
-    let activitiesArr = doc.data().activities || [];
-    const initialLength = activitiesArr.length;
-    activitiesArr = activitiesArr.filter(act => act.id !== activityId);
-    if (activitiesArr.length === initialLength) {
-      return res.status(404).json({ message: 'Activity not found.' });
-    }
-    await activitiesRef.set({ activities: activitiesArr }, { merge: true });
-    res.json({ message: 'Activity deleted successfully.' });
-  } catch (err) {
-    res.status(500).json({ message: 'Error deleting activity.', error: err.message });
-  }
-});
+// Email sending dependencies
+const nodemailer = require('nodemailer');
+const fs = require('fs');
 
-// Signature Routes
+
+// Send Signature Request to Supervisor (JWT protected)
 app.post('/send-signature-request', authenticateJWT, async (req, res) => {
   try {
     const { name, date, start_time, end_time, location, supervisorName, supervisorEmail } = req.body;
@@ -509,14 +365,17 @@ app.post('/send-signature-request', authenticateJWT, async (req, res) => {
       return res.status(400).json({ message: 'Missing required activity fields' });
     }
 
+    // Generate a unique token for this signature request
     const signatureToken = uuidv4();
 
+    // Store the token and signed:false with the activity in the user's activities
     const activitiesRef = db.collection('activities').doc(req.username);
     const doc = await activitiesRef.get();
     let activitiesArr = [];
     if (doc.exists) {
       activitiesArr = doc.data().activities || [];
     }
+    // Find the activity and add the token
     const idx = activitiesArr.findIndex(
       a => a.name === name && a.date === date && a.start_time === start_time && a.end_time === end_time && a.location === location
     );
@@ -525,6 +384,7 @@ app.post('/send-signature-request', authenticateJWT, async (req, res) => {
     activitiesArr[idx].signed = false;
     await activitiesRef.set({ activities: activitiesArr }, { merge: true });
 
+    // Get submitter's name and email from user profile
     const userRef = db.collection('users').doc(req.username);
     const userDoc = await userRef.get();
     let submitterName = req.username;
@@ -535,15 +395,17 @@ app.post('/send-signature-request', authenticateJWT, async (req, res) => {
       studentEmail = userData.email || '';
     }
 
+    // Load and fill the email template
     const templatePath = path.join(__dirname, 'email_template.html');
     let emailHtml = fs.readFileSync(templatePath, 'utf8');
+    // Construct the signature form URL
     let baseUrl;
     if (process.env.NODE_ENV === 'development') {
       baseUrl = 'http://localhost:3000';
     } else {
       baseUrl = 'https://neighborhood-liard.vercel.app';
     }
-    const signatureFormUrl = `${baseUrl}/signature-form.html?token=${signatureToken}`;
+    const signatureFormUrl = `${baseUrl}/api/signature-form?token=${signatureToken}`;
     emailHtml = emailHtml
       .replace(/{{supervisorName}}/g, supervisorName)
       .replace(/{{submitterName}}/g, submitterName)
@@ -555,7 +417,8 @@ app.post('/send-signature-request', authenticateJWT, async (req, res) => {
       .replace(/{{studentEmail}}/g, studentEmail)
       .replace(/{{signatureFormUrl}}/g, signatureFormUrl);
 
-    const transporter = nodemailer.createTransporter({
+    // Configure nodemailer transporter
+    const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: process.env.EMAIL_USER,
@@ -578,6 +441,169 @@ app.post('/send-signature-request', authenticateJWT, async (req, res) => {
   }
 });
 
+// Simple signature form endpoint (returns basic HTML for signature collection)
+app.get('/api/signature-form', async (req, res) => {
+  const { token } = req.query;
+  if (!token) {
+    return res.status(400).send('Invalid signature request');
+  }
+  
+  // Simple HTML form for signature collection
+  const signatureFormHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>VolunteerHub - Activity Signature</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+            .form-container { background: #f9f9f9; padding: 30px; border-radius: 10px; }
+            h1 { color: #2c3e50; text-align: center; }
+            .activity-info { background: white; padding: 20px; border-radius: 5px; margin: 20px 0; }
+            canvas { border: 2px solid #ddd; border-radius: 5px; display: block; margin: 20px auto; }
+            .btn { background: #3498db; color: white; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; margin: 10px; }
+            .btn:hover { background: #2980b9; }
+            .btn-clear { background: #e74c3c; }
+            .btn-clear:hover { background: #c0392b; }
+            .status { text-align: center; margin: 20px 0; padding: 10px; border-radius: 5px; }
+            .success { background: #d4edda; color: #155724; }
+            .error { background: #f8d7da; color: #721c24; }
+        </style>
+    </head>
+    <body>
+        <div class="form-container">
+            <h1>🖋️ Activity Signature</h1>
+            <div id="activityInfo" class="activity-info">Loading activity details...</div>
+            <div style="text-align: center;">
+                <p><strong>Please sign below to confirm the activity:</strong></p>
+                <canvas id="signatureCanvas" width="400" height="200"></canvas>
+                <br>
+                <button class="btn btn-clear" onclick="clearSignature()">Clear</button>
+                <button class="btn" onclick="submitSignature()">Submit Signature</button>
+            </div>
+            <div id="status" class="status" style="display: none;"></div>
+        </div>
+        
+        <script>
+            const canvas = document.getElementById('signatureCanvas');
+            const ctx = canvas.getContext('2d');
+            let isDrawing = false;
+            
+            // Set up canvas for signature
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            
+            // Mouse events
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            
+            // Touch events for mobile
+            canvas.addEventListener('touchstart', handleTouch);
+            canvas.addEventListener('touchmove', handleTouch);
+            canvas.addEventListener('touchend', stopDrawing);
+            
+            function startDrawing(e) {
+                isDrawing = true;
+                const rect = canvas.getBoundingClientRect();
+                ctx.beginPath();
+                ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+            }
+            
+            function draw(e) {
+                if (!isDrawing) return;
+                const rect = canvas.getBoundingClientRect();
+                ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+                ctx.stroke();
+            }
+            
+            function stopDrawing() {
+                isDrawing = false;
+            }
+            
+            function handleTouch(e) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const mouseEvent = new MouseEvent(e.type === 'touchstart' ? 'mousedown' : 
+                                                 e.type === 'touchmove' ? 'mousemove' : 'mouseup', {
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                canvas.dispatchEvent(mouseEvent);
+            }
+            
+            function clearSignature() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            async function submitSignature() {
+                const signatureData = canvas.toDataURL();
+                const token = '${token}';
+                
+                try {
+                    const response = await fetch(\`/sign-activity/\${token}\`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ signature: signatureData })
+                    });
+                    
+                    const result = await response.json();
+                    const statusDiv = document.getElementById('status');
+                    
+                    if (response.ok) {
+                        statusDiv.className = 'status success';
+                        statusDiv.textContent = '✅ Signature submitted successfully! Thank you.';
+                        document.querySelector('.btn').disabled = true;
+                    } else {
+                        statusDiv.className = 'status error';
+                        statusDiv.textContent = '❌ Error: ' + (result.message || 'Failed to submit signature');
+                    }
+                    statusDiv.style.display = 'block';
+                } catch (error) {
+                    const statusDiv = document.getElementById('status');
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = '❌ Network error. Please try again.';
+                    statusDiv.style.display = 'block';
+                }
+            }
+            
+            // Load activity details
+            async function loadActivity() {
+                try {
+                    const token = '${token}';
+                    const response = await fetch(\`/activity-by-token/\${token}\`);
+                    
+                    if (response.ok) {
+                        const activity = await response.json();
+                        document.getElementById('activityInfo').innerHTML = \`
+                            <h3>\${activity.name}</h3>
+                            <p><strong>Date:</strong> \${activity.date}</p>
+                            <p><strong>Time:</strong> \${activity.start_time} - \${activity.end_time}</p>
+                            <p><strong>Location:</strong> \${activity.location}</p>
+                            <p><strong>Volunteer:</strong> \${activity.username}</p>
+                        \`;
+                    } else {
+                        document.getElementById('activityInfo').innerHTML = 
+                            '<p style="color: red;">❌ Invalid or expired signature request.</p>';
+                        document.querySelector('.btn').disabled = true;
+                    }
+                } catch (error) {
+                    document.getElementById('activityInfo').innerHTML = 
+                        '<p style="color: red;">❌ Error loading activity details.</p>';
+                }
+            }
+            
+            loadActivity();
+        </script>
+    </body>
+    </html>
+  `;
+  
+  res.send(signatureFormHTML);
+});
+
+// GET activity by signature token (for signature form)
 app.get('/activity-by-token/:token', async (req, res) => {
   const { token } = req.params;
   try {
@@ -595,9 +621,10 @@ app.get('/activity-by-token/:token', async (req, res) => {
   }
 });
 
+// Sign activity (for signature form)
 app.post('/sign-activity/:token', async (req, res) => {
   const { token } = req.params;
-  const { signature } = req.body;
+  const { signature } = req.body; // this is the data URL from the canvas
   try {
     const snapshot = await db.collection('activities').get();
     let updated = false;
@@ -606,7 +633,7 @@ app.post('/sign-activity/:token', async (req, res) => {
       const idx = activities.findIndex(a => a.signatureToken === token);
       if (idx !== -1 && !activities[idx].signed) {
         activities[idx].signed = true;
-        activities[idx].signatureData = signature;
+        activities[idx].signatureData = signature; // store the image data URL
         await db.collection('activities').doc(doc.id).update({ activities });
         updated = true;
         break;
@@ -619,31 +646,7 @@ app.post('/sign-activity/:token', async (req, res) => {
   }
 });
 
-// User Routes
-app.get('/users', authenticateJWT, async (req, res) => {
-  try {
-    const userRef = db.collection('users').doc(req.username);
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) return res.status(404).json({});
-    const userData = userDoc.data();
-    if (userData && userData.password) delete userData.password;
-
-    const userDataRef = db.collection('userData').doc(req.userID);
-    const userDataDoc = await userDataRef.get();
-    let activities = [];
-    if (userDataDoc.exists) {
-      const userDataObj = userDataDoc.data();
-      activities = userDataObj.activities || [];
-    }
-    userData.activities = activities;
-
-    res.status(200).json(userData);
-  } catch (error) {
-    console.error('Get user info error', error);
-    res.status(500).json({});
-  }
-});
-
+// Update user info (JWT protected)
 app.put('/users', authenticateJWT, async (req, res) => {
   try {
     const { username, firstName, lastName, email, phone, profilePic } = req.body;
@@ -651,6 +654,7 @@ app.put('/users', authenticateJWT, async (req, res) => {
     const userDoc = await userRef.get();
     if (!userDoc.exists) return res.status(404).json({ message: 'User not found' });
 
+    // Only update fields that are provided
     const updates = {};
     if (username) updates.username = username;
     if (firstName) updates.firstName = firstName;
@@ -666,25 +670,7 @@ app.put('/users', authenticateJWT, async (req, res) => {
   }
 });
 
-// Dashboard Route
-app.get("/dashboard.html", (req, res) => {
-  let userName = "";
-  if (req.session && req.session.username) {
-    userName = req.session.username;
-  } else if (req.query && req.query.username) {
-    userName = req.query.username;
-  } else {
-    userName = "Guest";
-  }
-  const dashboardPath = path.join(__dirname, "public", "dashboard.html");
-  fs.readFile(dashboardPath, "utf8", (err, html) => {
-    if (err) return res.status(500).send("Error loading dashboard");
-    const replaced = html.replace(/const userName = ".*?";/, `const userName = "${userName}";`);
-    res.send(replaced);
-  });
-});
-
-// Leaderboard Route
+// Leaderboard endpoint: returns top users by approved (signed) hours
 app.get('/leaderboard', async (req, res) => {
   try {
     const snapshot = await db.collection('activities').get();
@@ -695,12 +681,13 @@ app.get('/leaderboard', async (req, res) => {
       let approvedHours = 0;
       let unapprovedHours = 0;
       for (const act of activities) {
+        // Calculate hours for each activity
         let hours = 0;
         if (act.start_time && act.end_time) {
           const [sh, sm] = act.start_time.split(':').map(Number);
           const [eh, em] = act.end_time.split(':').map(Number);
           let diff = (eh * 60 + em) - (sh * 60 + sm);
-          if (diff < 0) diff += 24 * 60;
+          if (diff < 0) diff += 24 * 60; // handle overnight
           hours = diff / 60;
         }
         if (act.signed) {
@@ -711,7 +698,9 @@ app.get('/leaderboard', async (req, res) => {
       }
       users.push({ username, approvedHours, unapprovedHours });
     }
+    // Sort by approvedHours descending
     users.sort((a, b) => b.approvedHours - a.approvedHours);
+    // Optionally, get display names from users collection
     const leaderboard = [];
     for (const user of users) {
       let displayName = user.username;
@@ -736,9 +725,72 @@ app.get('/leaderboard', async (req, res) => {
   }
 });
 
-// Community Posts Routes
+// Utility: Ensure all activities in the user's activities array have an id
+async function ensureActivityIdsForUser(username) {
+  const activitiesRef = db.collection('activities').doc(username);
+  const doc = await activitiesRef.get();
+  if (!doc.exists) return;
+  let activitiesArr = doc.data().activities || [];
+  let changed = false;
+  activitiesArr = activitiesArr.map(act => {
+    if (!act.id) {
+      changed = true;
+      return { ...act, id: uuidv4() };
+    }
+    return act;
+  });
+  if (changed) {
+    await activitiesRef.set({ activities: activitiesArr }, { merge: true });
+  }
+}
+
+// DELETE /activities/:id - Delete an activity by ID (requires authentication)
+app.delete('/activities/:id', authenticateJWT, async (req, res) => {
+  const activityId = req.params.id;
+  if (!activityId) {
+    return res.status(400).json({ message: 'Activity ID is required.' });
+  }
+  try {
+    await ensureActivityIdsForUser(req.username);
+    // Find the user's activities document
+    const activitiesRef = db.collection('activities').doc(req.username);
+    const doc = await activitiesRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ message: 'No activities found for user.' });
+    }
+    let activitiesArr = doc.data().activities || [];
+    const initialLength = activitiesArr.length;
+    // Remove the activity with the matching id
+    activitiesArr = activitiesArr.filter(act => act.id !== activityId);
+    if (activitiesArr.length === initialLength) {
+      return res.status(404).json({ message: 'Activity not found.' });
+    }
+    await activitiesRef.set({ activities: activitiesArr }, { merge: true });
+    res.json({ message: 'Activity deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error deleting activity.', error: err.message });
+  }
+});
+
+// Use memory storage for multer (for Firebase Storage upload)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image files are allowed!'));
+    }
+    cb(null, true);
+  }
+});
+
+// In-memory posts fallback (for demo, replace with Firestore for production)
+// let communityPosts = [];
+
+// GET /api/community-posts - Get all posts
 app.get('/api/community-posts', async (req, res) => {
   try {
+    // Fetch posts from Firestore
     const postsSnap = await db.collection('communityPosts').orderBy('createdAt', 'desc').get();
     const posts = postsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json({ posts });
@@ -747,12 +799,14 @@ app.get('/api/community-posts', async (req, res) => {
   }
 });
 
+// POST /api/community-posts - Create a new post (with optional image)
 app.post('/api/community-posts', upload.single('image'), async (req, res) => {
   try {
     const { content, author } = req.body;
     if (!content || !author) return res.status(400).json({ message: 'Missing content or author.' });
     let imageUrl = null;
     if (req.file) {
+      // Upload to Firebase Storage
       const bucket = getStorage().bucket();
       const fileName = `community-posts/${Date.now()}_${req.file.originalname}`;
       const file = bucket.file(fileName);
@@ -763,6 +817,7 @@ app.post('/api/community-posts', upload.single('image'), async (req, res) => {
       await file.makePublic();
       imageUrl = file.publicUrl();
     }
+    // Handle activity post fields
     let isActivity = false;
     let activityData = undefined;
     if (typeof req.body.isActivity !== 'undefined') {
@@ -783,6 +838,7 @@ app.post('/api/community-posts', upload.single('image'), async (req, res) => {
       ...(typeof isActivity !== 'undefined' ? { isActivity } : {}),
       ...(typeof activityData !== 'undefined' ? { activityData } : {})
     };
+    // Save to Firestore
     const docRef = await db.collection('communityPosts').add(post);
     res.status(201).json({ post: { id: docRef.id, ...post } });
   } catch (err) {
@@ -790,6 +846,7 @@ app.post('/api/community-posts', upload.single('image'), async (req, res) => {
   }
 });
 
+// DELETE /api/community-posts/:id - Delete a post by ID (only by author)
 app.delete('/api/community-posts/:id', async (req, res) => {
   const postId = req.params.id;
   const username = req.query.username || req.body?.username || req.headers['x-username'] || req.headers['username'] || '';
@@ -807,13 +864,16 @@ app.delete('/api/community-posts/:id', async (req, res) => {
   }
 });
 
-// Friends API Routes
+// --- Friends API (Firestore-backed) ---
+// GET /api/friends/search?query=xxx&username=yyy
 app.get('/api/friends/search', async (req, res) => {
   const { query, username } = req.query;
   if (!query) return res.json({ users: [] });
   try {
+    // Fetch all users from Firestore
     const usersSnap = await db.collection('users').get();
     const allUsers = usersSnap.docs.map(doc => doc.data().username).filter(Boolean);
+    // Exclude self and already-friends
     let friends = [];
     if (username) {
       const userDoc = await db.collection('users').where('username', '==', username).get();
@@ -828,6 +888,7 @@ app.get('/api/friends/search', async (req, res) => {
   }
 });
 
+// GET /api/friends?username=xxx
 app.get('/api/friends', async (req, res) => {
   const { username } = req.query;
   if (!username) return res.status(400).json({ friends: [] });
@@ -841,11 +902,13 @@ app.get('/api/friends', async (req, res) => {
   }
 });
 
+// POST /api/friends/add
 app.post('/api/friends/add', express.json(), async (req, res) => {
   const { username, friend } = req.body;
   if (!username || !friend) return res.status(400).json({ message: 'Missing username or friend.' });
   if (username === friend) return res.status(400).json({ message: 'Cannot add yourself.' });
   try {
+    // Check both users exist
     const userSnap = await db.collection('users').where('username', '==', username).get();
     const friendSnap = await db.collection('users').where('username', '==', friend).get();
     if (userSnap.empty || friendSnap.empty) return res.status(404).json({ message: 'User not found.' });
@@ -860,14 +923,17 @@ app.post('/api/friends/add', express.json(), async (req, res) => {
     res.status(500).json({ message: 'Error adding friend.', error: err.message });
   }
 });
+// --- End Friends API ---
 
-// Theme Routes
+// POST /themes - Create a new theme
+db; // ensure db is initialized
 app.post('/themes', async (req, res) => {
   try {
     const { name, colors, description, createdBy } = req.body;
     if (!name) {
       return res.status(400).json({ message: 'Theme name is required.' });
     }
+    // You can add more validation for colors, etc. as needed
     const newTheme = {
       name,
       colors: colors || {},
@@ -883,6 +949,7 @@ app.post('/themes', async (req, res) => {
   }
 });
 
+// GET /themes - List all themes
 app.get('/themes', async (req, res) => {
   try {
     const snapshot = await db.collection('themes').get();
@@ -894,35 +961,9 @@ app.get('/themes', async (req, res) => {
   }
 });
 
-// API Routes
+// Expose Mapbox API key to frontend (read-only)
 app.get('/api/mapbox-key', (req, res) => {
   res.json({ key: process.env.MAPBOX_API_KEY || '' });
-});
-
-app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
-
-// Add error handling middleware
-app.use((err, req, res, next) => {
-  console.error('❌ Server Error:', err);
-  
-  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-    return res.status(400).json({ 
-      message: 'Invalid JSON format',
-      error: 'Request body contains invalid JSON'
-    });
-  }
-  
-  if (err.type === 'entity.too.large') {
-    return res.status(400).json({
-      message: 'Request body too large',
-      error: 'File or data size exceeds limit'
-    });
-  }
-  
-  res.status(500).json({ 
-    message: 'Internal server error',
-    error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
-  });
 });
 
 // Start Server

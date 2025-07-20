@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VolunteerHub API Testing Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .auth-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .auth-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .auth-status {
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .auth-status.logged-out {
+            background: #fee;
+            color: #d63031;
+        }
+
+        .auth-status.logged-in {
+            background: #efe;
+            color: #00b894;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            min-height: 600px;
+        }
+
+        .sidebar {
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            padding: 20px;
+        }
+
+        .endpoint-group {
+            margin-bottom: 25px;
+        }
+
+        .endpoint-group h3 {
+            color: #2c3e50;
+            margin-bottom: 12px;
+            font-size: 1.1rem;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+
+        .endpoint-item {
+            display: block;
+            padding: 10px 15px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            text-decoration: none;
+            color: #2c3e50;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .endpoint-item:hover, .endpoint-item.active {
+            background: #3498db;
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .endpoint-method {
+            font-size: 0.8rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-right: 8px;
+            font-weight: bold;
+        }
+
+        .method-get { background: #00b894; color: white; }
+        .method-post { background: #e17055; color: white; }
+        .method-put { background: #fdcb6e; color: #2c3e50; }
+        .method-delete { background: #d63031; color: white; }
+
+        .test-area {
+            padding: 30px;
+        }
+
+        .test-form {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+        }
+
+        .test-form h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.4rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+        }
+
+        .btn-success:hover {
+            box-shadow: 0 5px 15px rgba(46, 204, 113, 0.4);
+        }
+
+        .response-area {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .response-area h4 {
+            margin-bottom: 15px;
+            color: #3498db;
+        }
+
+        .response-content {
+            background: #34495e;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .status-success {
+            border-left: 4px solid #2ecc71;
+        }
+
+        .status-error {
+            border-left: 4px solid #e74c3c;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .file-input {
+            border: 2px dashed #ddd;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-input:hover {
+            border-color: #3498db;
+            background: #f8f9fa;
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .endpoint-description {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                border-right: none;
+                border-bottom: 1px solid #e9ecef;
+            }
+            
+            .auth-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 VolunteerHub Backend API Tester</h1>
+            <p>Clean backend API testing interface - No webapp dependencies</p>
+        </div>
+
+        <div class="auth-section">
+            <div class="auth-controls">
+                <div class="auth-status logged-out" id="authStatus">Not Authenticated</div>
+                <input type="text" id="testUsername" placeholder="Username" style="max-width: 200px;">
+                <input type="password" id="testPassword" placeholder="Password" style="max-width: 200px;">
+                <button class="btn" onclick="quickLogin()">Quick Login</button>
+                <button class="btn btn-danger" onclick="logout()">Logout</button>
+                <button class="btn btn-success" onclick="runAllTests()">Run All Tests</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="endpoint-group">
+                    <h3>🔐 Authentication</h3>
+                    <div class="endpoint-item" onclick="showEndpoint('signup')">
+                        <span class="endpoint-method method-post">POST</span>/signup
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('login')">
+                        <span class="endpoint-method method-post">POST</span>/login
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('validate')">
+                        <span class="endpoint-method method-get">GET</span>/validate-session
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('logout')">
+                        <span class="endpoint-method method-post">POST</span>/logout
+                    </div>
+                </div>
+
+                <div class="endpoint-group">
+                    <h3>👤 Users</h3>
+                    <div class="endpoint-item" onclick="showEndpoint('getUser')">
+                        <span class="endpoint-method method-get">GET</span>/users
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('updateUser')">
+                        <span class="endpoint-method method-put">PUT</span>/users
+                    </div>
+                </div>
+
+                <div class="endpoint-group">
+                    <h3>📋 Activities</h3>
+                    <div class="endpoint-item" onclick="showEndpoint('getActivities')">
+                        <span class="endpoint-method method-get">GET</span>/activities/:username
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('addActivity')">
+                        <span class="endpoint-method method-post">POST</span>/activities
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('deleteActivity')">
+                        <span class="endpoint-method method-delete">DELETE</span>/activities/:id
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('sendSignature')">
+                        <span class="endpoint-method method-post">POST</span>/send-signature-request
+                    </div>
+                </div>
+
+                <div class="endpoint-group">
+                    <h3>🏆 Community</h3>
+                    <div class="endpoint-item" onclick="showEndpoint('leaderboard')">
+                        <span class="endpoint-method method-get">GET</span>/leaderboard
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('communityPosts')">
+                        <span class="endpoint-method method-get">GET</span>/api/community-posts
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('createPost')">
+                        <span class="endpoint-method method-post">POST</span>/api/community-posts
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('friends')">
+                        <span class="endpoint-method method-get">GET</span>/api/friends
+                    </div>
+                </div>
+
+                <div class="endpoint-group">
+                    <h3>🎨 Themes</h3>
+                    <div class="endpoint-item" onclick="showEndpoint('getThemes')">
+                        <span class="endpoint-method method-get">GET</span>/themes
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('createTheme')">
+                        <span class="endpoint-method method-post">POST</span>/themes
+                    </div>
+                </div>
+
+                <div class="endpoint-group">
+                    <h3>🔧 System</h3>
+                    <div class="endpoint-item" onclick="showEndpoint('health')">
+                        <span class="endpoint-method method-get">GET</span>/api/health
+                    </div>
+                    <div class="endpoint-item" onclick="showEndpoint('mapboxKey')">
+                        <span class="endpoint-method method-get">GET</span>/api/mapbox-key
+                    </div>
+                </div>
+            </div>
+
+            <div class="test-area">
+                <div id="testContent">
+                    <h2>Welcome to the VolunteerHub API Tester</h2>
+                    <p>Select an endpoint from the sidebar to start testing. Use the Quick Login feature to authenticate with test credentials.</p>
+                    
+                    <div class="endpoint-description">
+                        <h3>📋 Instructions</h3>
+                        <ul>
+                            <li><strong>Authentication:</strong> Most endpoints require authentication. Use Quick Login or manual signup/login.</li>
+                            <li><strong>Token Storage:</strong> JWT tokens are automatically stored and included in requests.</li>
+                            <li><strong>Test Data:</strong> Use the provided test forms or modify as needed.</li>
+                            <li><strong>Run All Tests:</strong> Execute a comprehensive test suite covering all endpoints.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="response-area">
+                    <h4>📤 Response</h4>
+                    <div class="response-content" id="responseContent">
+No requests made yet. Select an endpoint and submit a request to see the response here.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let authToken = localStorage.getItem('authToken') || null;
+        let currentUsername = localStorage.getItem('currentUsername') || null;
+        const baseUrl = window.location.origin;
+
+        // Update auth status on page load
+        updateAuthStatus();
+
+        async function makeRequest(method, endpoint, data = null, includeAuth = true) {
+            const url = `${baseUrl}${endpoint}`;
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include'
+            };
+
+            if (includeAuth && authToken) {
+                options.headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            if (data && method !== 'GET') {
+                if (data instanceof FormData) {
+                    delete options.headers['Content-Type'];
+                    options.body = data;
+                } else {
+                    options.body = JSON.stringify(data);
+                }
+            }
+
+            try {
+                showLoading(true);
+                const response = await fetch(url, options);
+                const responseData = await response.text();
+                
+                let parsedData;
+                try {
+                    parsedData = JSON.parse(responseData);
+                } catch {
+                    parsedData = responseData;
+                }
+
+                const result = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: parsedData
+                };
+
+                displayResponse(result);
+                return result;
+            } catch (error) {
+                const errorResult = {
+                    status: 0,
+                    statusText: 'Network Error',
+                    data: { error: error.message }
+                };
+                displayResponse(errorResult);
+                return errorResult;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displayResponse(result) {
+            const responseContent = document.getElementById('responseContent');
+            const statusClass = result.status >= 200 && result.status < 300 ? 'status-success' : 'status-error';
+            
+            responseContent.className = `response-content ${statusClass}`;
+            responseContent.textContent = JSON.stringify({
+                status: result.status,
+                statusText: result.statusText,
+                timestamp: new Date().toISOString(),
+                data: result.data
+            }, null, 2);
+        }
+
+        function showLoading(loading) {
+            const testArea = document.querySelector('.test-area');
+            if (loading) {
+                testArea.classList.add('loading');
+            } else {
+                testArea.classList.remove('loading');
+            }
+        }
+
+        function updateAuthStatus() {
+            const authStatus = document.getElementById('authStatus');
+            if (authToken && currentUsername) {
+                authStatus.textContent = `✅ Authenticated as ${currentUsername}`;
+                authStatus.className = 'auth-status logged-in';
+            } else {
+                authStatus.textContent = '❌ Not Authenticated';
+                authStatus.className = 'auth-status logged-out';
+            }
+        }
+
+        async function quickLogin() {
+            const username = document.getElementById('testUsername').value || 'testuser123';
+            const password = document.getElementById('testPassword').value || 'password123';
+            
+            const result = await makeRequest('POST', '/login', {
+                username: username,
+                password: password
+            }, false);
+
+            if (result.status === 200 && result.data.token) {
+                authToken = result.data.token;
+                currentUsername = result.data.username;
+                localStorage.setItem('authToken', authToken);
+                localStorage.setItem('currentUsername', currentUsername);
+                updateAuthStatus();
+            }
+        }
+
+        async function logout() {
+            await makeRequest('POST', '/logout');
+            authToken = null;
+            currentUsername = null;
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('currentUsername');
+            updateAuthStatus();
+        }
+
+        function showEndpoint(endpointName) {
+            // Remove active class from all endpoint items
+            document.querySelectorAll('.endpoint-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Add active class to clicked item
+            event.target.classList.add('active');
+
+            const testContent = document.getElementById('testContent');
+            testContent.innerHTML = getEndpointHTML(endpointName);
+        }
+
+        function getEndpointHTML(endpointName) {
+            const endpoints = {
+                health: `
+                    <div class="test-form">
+                        <h3>🏥 Health Check</h3>
+                        <div class="endpoint-description">
+                            <p>Check if the API server is running and healthy.</p>
+                        </div>
+                        <button class="btn" onclick="testHealth()">Test Health Endpoint</button>
+                    </div>
+                `,
+                signup: `
+                    <div class="test-form">
+                        <h3>👤 User Signup</h3>
+                        <div class="endpoint-description">
+                            <p>Register a new user account with required information.</p>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>First Name:</label>
+                                <input type="text" id="signupFirstName" value="Test" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Last Name:</label>
+                                <input type="text" id="signupLastName" value="User" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Email:</label>
+                            <input type="email" id="signupEmail" value="testuser@example.com" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Username:</label>
+                                <input type="text" id="signupUsername" value="testuser${Date.now()}" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Phone Number:</label>
+                                <input type="text" id="signupPhone" value="123-456-7890">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Password:</label>
+                                <input type="password" id="signupPassword" value="password123" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Zip Code:</label>
+                                <input type="text" id="signupZipCode" value="12345">
+                            </div>
+                        </div>
+                        <button class="btn" onclick="testSignup()">Test Signup</button>
+                    </div>
+                `,
+                login: `
+                    <div class="test-form">
+                        <h3>🔑 User Login</h3>
+                        <div class="endpoint-description">
+                            <p>Authenticate with username/email and password to receive a JWT token.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Username/Email:</label>
+                            <input type="text" id="loginUsername" value="testuser123" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Password:</label>
+                            <input type="password" id="loginPassword" value="password123" required>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="loginRemember"> Remember Me
+                            </label>
+                        </div>
+                        <button class="btn" onclick="testLogin()">Test Login</button>
+                    </div>
+                `,
+                validate: `
+                    <div class="test-form">
+                        <h3>🔍 Validate Session</h3>
+                        <div class="endpoint-description">
+                            <p>Validate the current JWT token and get user information.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Token (auto-filled):</label>
+                            <input type="text" id="validateToken" value="${authToken || ''}" readonly>
+                        </div>
+                        <button class="btn" onclick="testValidate()">Test Validation</button>
+                    </div>
+                `,
+                getUser: `
+                    <div class="test-form">
+                        <h3>👤 Get User Info</h3>
+                        <div class="endpoint-description">
+                            <p>Get current user information (requires authentication).</p>
+                        </div>
+                        <button class="btn" onclick="testGetUser()">Get User Info</button>
+                    </div>
+                `,
+                updateUser: `
+                    <div class="test-form">
+                        <h3>✏️ Update User Info</h3>
+                        <div class="endpoint-description">
+                            <p>Update user profile information (requires authentication).</p>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>First Name:</label>
+                                <input type="text" id="updateFirstName" value="Updated">
+                            </div>
+                            <div class="form-group">
+                                <label>Last Name:</label>
+                                <input type="text" id="updateLastName" value="Name">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Email:</label>
+                            <input type="email" id="updateEmail" value="updated@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Phone:</label>
+                            <input type="text" id="updatePhone" value="987-654-3210">
+                        </div>
+                        <button class="btn" onclick="testUpdateUser()">Update User</button>
+                    </div>
+                `,
+                getActivities: `
+                    <div class="test-form">
+                        <h3>📋 Get Activities</h3>
+                        <div class="endpoint-description">
+                            <p>Get activities for a specific user (requires authentication).</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Username:</label>
+                            <input type="text" id="getActivitiesUsername" value="${currentUsername || 'testuser123'}" required>
+                        </div>
+                        <button class="btn" onclick="testGetActivities()">Get Activities</button>
+                    </div>
+                `,
+                addActivity: `
+                    <div class="test-form">
+                        <h3>➕ Add Activity</h3>
+                        <div class="endpoint-description">
+                            <p>Add a new volunteer activity (requires authentication).</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Activity Name:</label>
+                            <input type="text" id="activityName" value="Community Garden Cleanup" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Date:</label>
+                                <input type="date" id="activityDate" value="${new Date().toISOString().split('T')[0]}" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Location:</label>
+                                <input type="text" id="activityLocation" value="Central Community Garden" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Start Time:</label>
+                                <input type="time" id="activityStartTime" value="09:00" required>
+                            </div>
+                            <div class="form-group">
+                                <label>End Time:</label>
+                                <input type="time" id="activityEndTime" value="12:00" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Supervisor Name:</label>
+                                <input type="text" id="activitySupervisorName" value="Jane Smith" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Supervisor Email:</label>
+                                <input type="email" id="activitySupervisorEmail" value="jane.smith@example.com" required>
+                            </div>
+                        </div>
+                        <button class="btn" onclick="testAddActivity()">Add Activity</button>
+                    </div>
+                `,
+                deleteActivity: `
+                    <div class="test-form">
+                        <h3>🗑️ Delete Activity</h3>
+                        <div class="endpoint-description">
+                            <p>Delete an activity by ID (requires authentication).</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Activity ID:</label>
+                            <input type="text" id="deleteActivityId" placeholder="Enter activity ID" required>
+                        </div>
+                        <button class="btn btn-danger" onclick="testDeleteActivity()">Delete Activity</button>
+                        <button class="btn" onclick="loadActivityIds()">Load Activity IDs</button>
+                    </div>
+                `,
+                sendSignature: `
+                    <div class="test-form">
+                        <h3>📧 Send Signature Request</h3>
+                        <div class="endpoint-description">
+                            <p>Send signature request email to supervisor (requires authentication).</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Activity Name:</label>
+                            <input type="text" id="sigActivityName" value="Community Garden Cleanup" required>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Date:</label>
+                                <input type="date" id="sigActivityDate" value="${new Date().toISOString().split('T')[0]}" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Location:</label>
+                                <input type="text" id="sigActivityLocation" value="Central Community Garden" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Start Time:</label>
+                                <input type="time" id="sigActivityStartTime" value="09:00" required>
+                            </div>
+                            <div class="form-group">
+                                <label>End Time:</label>
+                                <input type="time" id="sigActivityEndTime" value="12:00" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Supervisor Name:</label>
+                                <input type="text" id="sigSupervisorName" value="Jane Smith" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Supervisor Email:</label>
+                                <input type="email" id="sigSupervisorEmail" value="jane.smith@example.com" required>
+                            </div>
+                        </div>
+                        <button class="btn" onclick="testSendSignature()">Send Signature Request</button>
+                    </div>
+                `,
+                leaderboard: `
+                    <div class="test-form">
+                        <h3>🏆 Leaderboard</h3>
+                        <div class="endpoint-description">
+                            <p>Get the community leaderboard showing top volunteers by hours.</p>
+                        </div>
+                        <button class="btn" onclick="testLeaderboard()">Get Leaderboard</button>
+                    </div>
+                `,
+                communityPosts: `
+                    <div class="test-form">
+                        <h3>📢 Community Posts</h3>
+                        <div class="endpoint-description">
+                            <p>Get all community posts from the platform.</p>
+                        </div>
+                        <button class="btn" onclick="testCommunityPosts()">Get Community Posts</button>
+                    </div>
+                `,
+                createPost: `
+                    <div class="test-form">
+                        <h3>✍️ Create Community Post</h3>
+                        <div class="endpoint-description">
+                            <p>Create a new community post with optional image.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Author:</label>
+                            <input type="text" id="postAuthor" value="${currentUsername || 'testuser'}" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Content:</label>
+                            <textarea id="postContent" rows="4" placeholder="What's happening in your community?" required>Just finished an amazing volunteer session at the local food bank! 🍎 Great to see so many people coming together to help those in need.</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Image (optional):</label>
+                            <div class="file-input" onclick="document.getElementById('postImage').click()">
+                                <input type="file" id="postImage" accept="image/*" style="display: none;">
+                                <p>Click to select an image</p>
+                            </div>
+                        </div>
+                        <button class="btn" onclick="testCreatePost()">Create Post</button>
+                    </div>
+                `,
+                friends: `
+                    <div class="test-form">
+                        <h3>👥 Friends</h3>
+                        <div class="endpoint-description">
+                            <p>Get friends list for the current user.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Username:</label>
+                            <input type="text" id="friendsUsername" value="${currentUsername || 'testuser'}" required>
+                        </div>
+                        <button class="btn" onclick="testGetFriends()">Get Friends</button>
+                        <button class="btn" onclick="testSearchFriends()">Search Friends</button>
+                    </div>
+                `,
+                getThemes: `
+                    <div class="test-form">
+                        <h3>🎨 Get Themes</h3>
+                        <div class="endpoint-description">
+                            <p>Get all available themes for the application.</p>
+                        </div>
+                        <button class="btn" onclick="testGetThemes()">Get Themes</button>
+                    </div>
+                `,
+                createTheme: `
+                    <div class="test-form">
+                        <h3>🎨 Create Theme</h3>
+                        <div class="endpoint-description">
+                            <p>Create a new theme with custom colors.</p>
+                        </div>
+                        <div class="form-group">
+                            <label>Theme Name:</label>
+                            <input type="text" id="themeName" value="Ocean Breeze" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Description:</label>
+                            <input type="text" id="themeDescription" value="A calming blue theme inspired by ocean waves">
+                        </div>
+                        <div class="form-group">
+                            <label>Primary Color:</label>
+                            <input type="color" id="themePrimary" value="#3498db">
+                        </div>
+                        <div class="form-group">
+                            <label>Secondary Color:</label>
+                            <input type="color" id="themeSecondary" value="#2980b9">
+                        </div>
+                        <div class="form-group">
+                            <label>Created By:</label>
+                            <input type="text" id="themeCreatedBy" value="${currentUsername || 'testuser'}">
+                        </div>
+                        <button class="btn" onclick="testCreateTheme()">Create Theme</button>
+                    </div>
+                `,
+                mapboxKey: `
+                    <div class="test-form">
+                        <h3>🗺️ Mapbox API Key</h3>
+                        <div class="endpoint-description">
+                            <p>Get the Mapbox API key for map functionality.</p>
+                        </div>
+                        <button class="btn" onclick="testMapboxKey()">Get Mapbox Key</button>
+                    </div>
+                `
+            };
+
+            return endpoints[endpointName] || '<p>Endpoint not found</p>';
+        }
+
+        // Test functions for each endpoint
+        async function testHealth() {
+            await makeRequest('GET', '/api/health', null, false);
+        }
+
+        async function testSignup() {
+            const data = {
+                firstName: document.getElementById('signupFirstName').value,
+                lastName: document.getElementById('signupLastName').value,
+                email: document.getElementById('signupEmail').value,
+                username: document.getElementById('signupUsername').value,
+                phoneNumber: document.getElementById('signupPhone').value,
+                password: document.getElementById('signupPassword').value,
+                zipCode: document.getElementById('signupZipCode').value
+            };
+            await makeRequest('POST', '/signup', data, false);
+        }
+
+        async function testLogin() {
+            const data = {
+                username: document.getElementById('loginUsername').value,
+                password: document.getElementById('loginPassword').value,
+                rememberMe: document.getElementById('loginRemember').checked
+            };
+            const result = await makeRequest('POST', '/login', data, false);
+            
+            if (result.status === 200 && result.data.token) {
+                authToken = result.data.token;
+                currentUsername = result.data.username;
+                localStorage.setItem('authToken', authToken);
+                localStorage.setItem('currentUsername', currentUsername);
+                updateAuthStatus();
+            }
+        }
+
+        async function testValidate() {
+            const token = document.getElementById('validateToken').value || authToken;
+            await makeRequest('GET', `/validate-session?token=${token}`, null, false);
+        }
+
+        async function testGetUser() {
+            await makeRequest('GET', '/users');
+        }
+
+        async function testUpdateUser() {
+            const data = {
+                firstName: document.getElementById('updateFirstName').value,
+                lastName: document.getElementById('updateLastName').value,
+                email: document.getElementById('updateEmail').value,
+                phone: document.getElementById('updatePhone').value
+            };
+            await makeRequest('PUT', '/users', data);
+        }
+
+        async function testGetActivities() {
+            const username = document.getElementById('getActivitiesUsername').value;
+            await makeRequest('GET', `/activities/${username}`);
+        }
+
+        async function testAddActivity() {
+            const data = {
+                name: document.getElementById('activityName').value,
+                date: document.getElementById('activityDate').value,
+                start_time: document.getElementById('activityStartTime').value,
+                end_time: document.getElementById('activityEndTime').value,
+                location: document.getElementById('activityLocation').value,
+                supervisorName: document.getElementById('activitySupervisorName').value,
+                supervisorEmail: document.getElementById('activitySupervisorEmail').value
+            };
+            await makeRequest('POST', '/activities', data);
+        }
+
+        async function testDeleteActivity() {
+            const activityId = document.getElementById('deleteActivityId').value;
+            if (!activityId) {
+                alert('Please enter an activity ID');
+                return;
+            }
+            await makeRequest('DELETE', `/activities/${activityId}`);
+        }
+
+        async function loadActivityIds() {
+            if (!currentUsername) {
+                alert('Please login first');
+                return;
+            }
+            const result = await makeRequest('GET', `/activities/${currentUsername}`);
+            if (result.status === 200 && result.data.activities) {
+                const ids = result.data.activities.map(a => a.id).filter(Boolean);
+                if (ids.length > 0) {
+                    document.getElementById('deleteActivityId').value = ids[0];
+                    alert(`Found ${ids.length} activities. First ID loaded: ${ids[0]}`);
+                } else {
+                    alert('No activities with IDs found');
+                }
+            }
+        }
+
+        async function testSendSignature() {
+            const data = {
+                name: document.getElementById('sigActivityName').value,
+                date: document.getElementById('sigActivityDate').value,
+                start_time: document.getElementById('sigActivityStartTime').value,
+                end_time: document.getElementById('sigActivityEndTime').value,
+                location: document.getElementById('sigActivityLocation').value,
+                supervisorName: document.getElementById('sigSupervisorName').value,
+                supervisorEmail: document.getElementById('sigSupervisorEmail').value
+            };
+            await makeRequest('POST', '/send-signature-request', data);
+        }
+
+        async function testLeaderboard() {
+            await makeRequest('GET', '/leaderboard', null, false);
+        }
+
+        async function testCommunityPosts() {
+            await makeRequest('GET', '/api/community-posts', null, false);
+        }
+
+        async function testCreatePost() {
+            const formData = new FormData();
+            formData.append('author', document.getElementById('postAuthor').value);
+            formData.append('content', document.getElementById('postContent').value);
+            
+            const imageFile = document.getElementById('postImage').files[0];
+            if (imageFile) {
+                formData.append('image', imageFile);
+            }
+
+            const url = `${baseUrl}/api/community-posts`;
+            const options = {
+                method: 'POST',
+                body: formData,
+                credentials: 'include'
+            };
+
+            try {
+                showLoading(true);
+                const response = await fetch(url, options);
+                const responseData = await response.json();
+                
+                const result = {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: responseData
+                };
+                displayResponse(result);
+            } catch (error) {
+                displayResponse({
+                    status: 0,
+                    statusText: 'Network Error',
+                    data: { error: error.message }
+                });
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function testGetFriends() {
+            const username = document.getElementById('friendsUsername').value;
+            await makeRequest('GET', `/api/friends?username=${username}`, null, false);
+        }
+
+        async function testSearchFriends() {
+            const username = document.getElementById('friendsUsername').value;
+            await makeRequest('GET', `/api/friends/search?query=test&username=${username}`, null, false);
+        }
+
+        async function testGetThemes() {
+            await makeRequest('GET', '/themes', null, false);
+        }
+
+        async function testCreateTheme() {
+            const data = {
+                name: document.getElementById('themeName').value,
+                description: document.getElementById('themeDescription').value,
+                colors: {
+                    primary: document.getElementById('themePrimary').value,
+                    secondary: document.getElementById('themeSecondary').value
+                },
+                createdBy: document.getElementById('themeCreatedBy').value
+            };
+            await makeRequest('POST', '/themes', data);
+        }
+
+        async function testMapboxKey() {
+            await makeRequest('GET', '/api/mapbox-key', null, false);
+        }
+
+        // Run all tests function
+        async function runAllTests() {
+            if (!confirm('This will run tests for all endpoints. Continue?')) return;
+            
+            const tests = [
+                { name: 'Health Check', fn: testHealth },
+                { name: 'Signup', fn: async () => {
+                    document.getElementById('signupUsername').value = `testuser${Date.now()}`;
+                    await testSignup();
+                }},
+                { name: 'Login', fn: testLogin },
+                { name: 'Validate Session', fn: testValidate },
+                { name: 'Get User', fn: testGetUser },
+                { name: 'Add Activity', fn: testAddActivity },
+                { name: 'Get Activities', fn: testGetActivities },
+                { name: 'Leaderboard', fn: testLeaderboard },
+                { name: 'Community Posts', fn: testCommunityPosts },
+                { name: 'Get Themes', fn: testGetThemes },
+                { name: 'Mapbox Key', fn: testMapboxKey }
+            ];
+
+            for (const test of tests) {
+                console.log(`Running test: ${test.name}`);
+                try {
+                    await test.fn();
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between tests
+                } catch (error) {
+                    console.error(`Test failed: ${test.name}`, error);
+                }
+            }
+            
+            alert('All tests completed! Check the response area and console for results.');
+        }
+
+        // File input change handler
+        document.addEventListener('change', function(e) {
+            if (e.target.id === 'postImage' && e.target.files[0]) {
+                const fileName = e.target.files[0].name;
+                e.target.parentNode.querySelector('p').textContent = `Selected: ${fileName}`;
+            }
+        });
+    </script>
+</body>
+</html>
