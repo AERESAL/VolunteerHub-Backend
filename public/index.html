@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VolunteerHub API Tester</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .endpoint-section {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            padding: 20px;
+        }
+        .method-badge {
+            font-size: 0.8em;
+            margin-right: 10px;
+        }
+        .response-area {
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .auth-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .nav-pills .nav-link {
+            margin-right: 10px;
+        }
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Auth Status -->
+    <div class="auth-status">
+        <div id="authStatus" class="alert alert-warning">
+            <i class="fas fa-user-slash"></i> Not Authenticated
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        <h1 class="text-center mb-4">
+            <i class="fas fa-heart text-danger"></i>
+            VolunteerHub API Tester
+        </h1>
+
+        <!-- Navigation -->
+        <ul class="nav nav-pills justify-content-center mb-4" id="apiTabs">
+            <li class="nav-item">
+                <a class="nav-link active" data-bs-toggle="pill" href="#auth">
+                    <i class="fas fa-lock"></i> Authentication
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="pill" href="#activities">
+                    <i class="fas fa-tasks"></i> Activities
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="pill" href="#signatures">
+                    <i class="fas fa-signature"></i> Signatures
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="pill" href="#community">
+                    <i class="fas fa-users"></i> Community
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="pill" href="#friends">
+                    <i class="fas fa-user-friends"></i> Friends
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="pill" href="#misc">
+                    <i class="fas fa-cogs"></i> Misc
+                </a>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Authentication Tab -->
+            <div class="tab-pane fade show active" id="auth">
+                <!-- Signup -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-success method-badge">POST</span>/signup</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <form id="signupForm">
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="First Name" name="firstName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Last Name" name="lastName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="email" class="form-control" placeholder="Email" name="email" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Username" name="username" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="password" class="form-control" placeholder="Password" name="password" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="tel" class="form-control" placeholder="Phone Number" name="phoneNumber">
+                                </div>
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Zip Code" name="zipCode">
+                                </div>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-user-plus"></i> Sign Up
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="signupResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Login -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-success method-badge">POST</span>/login</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <form id="loginForm">
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Username" name="username" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="password" class="form-control" placeholder="Password" name="password" required>
+                                </div>
+                                <div class="mb-3 form-check">
+                                    <input type="checkbox" class="form-check-input" name="rememberMe">
+                                    <label class="form-check-label">Remember Me</label>
+                                </div>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-sign-in-alt"></i> Login
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="loginResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Validate Session -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-primary method-badge">GET</span>/validate-session</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button id="validateSessionBtn" class="btn btn-primary">
+                                <i class="fas fa-check-circle"></i> Validate Current Session
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="validateResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logout -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-success method-badge">POST</span>/logout</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button id="logoutBtn" class="btn btn-danger">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="logoutResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activities Tab -->
+            <div class="tab-pane fade" id="activities">
+                <!-- Add Activity -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-success method-badge">POST</span>/activities</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <form id="addActivityForm">
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Activity Name" name="name" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="date" class="form-control" name="date" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="time" class="form-control" placeholder="Start Time" name="start_time" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="time" class="form-control" placeholder="End Time" name="end_time" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Location" name="location" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Supervisor Name" name="supervisorName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="email" class="form-control" placeholder="Supervisor Email" name="supervisorEmail" required>
+                                </div>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-plus"></i> Add Activity
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="addActivityResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Activities -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-primary method-badge">GET</span>/activities/:username</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" placeholder="Username" id="getActivitiesUsername">
+                                <button class="btn btn-primary" id="getActivitiesBtn">
+                                    <i class="fas fa-list"></i> Get Activities
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="getActivitiesResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delete Activity -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-danger method-badge">DELETE</span>/activities/:id</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" placeholder="Activity ID" id="deleteActivityId">
+                                <button class="btn btn-danger" id="deleteActivityBtn">
+                                    <i class="fas fa-trash"></i> Delete Activity
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="deleteActivityResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signatures Tab -->
+            <div class="tab-pane fade" id="signatures">
+                <!-- Send Signature Request -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-success method-badge">POST</span>/send-signature-request</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <form id="signatureRequestForm">
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Activity Name" name="name" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="date" class="form-control" name="date" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="time" class="form-control" placeholder="Start Time" name="start_time" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="time" class="form-control" placeholder="End Time" name="end_time" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Location" name="location" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Supervisor Name" name="supervisorName" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="email" class="form-control" placeholder="Supervisor Email" name="supervisorEmail" required>
+                                </div>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-envelope"></i> Send Signature Request
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="signatureRequestResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Activity by Token -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-primary method-badge">GET</span>/activity-by-token/:token</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" placeholder="Signature Token" id="activityToken">
+                                <button class="btn btn-primary" id="getActivityByTokenBtn">
+                                    <i class="fas fa-search"></i> Get Activity
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="activityByTokenResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Community Tab -->
+            <div class="tab-pane fade" id="community">
+                <!-- Get Community Posts -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-primary method-badge">GET</span>/api/community-posts</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button id="getCommunityPostsBtn" class="btn btn-primary">
+                                <i class="fas fa-list"></i> Get Community Posts
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="communityPostsResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create Community Post -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-success method-badge">POST</span>/api/community-posts</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <form id="createPostForm">
+                                <div class="mb-3">
+                                    <textarea class="form-control" placeholder="Post Content" name="content" rows="3" required></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Author Username" name="author" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="file" class="form-control" name="image" accept="image/*">
+                                    <small class="text-muted">Optional image upload</small>
+                                </div>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-plus"></i> Create Post
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="createPostResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Friends Tab -->
+            <div class="tab-pane fade" id="friends">
+                <!-- Search Friends -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-primary method-badge">GET</span>/api/friends/search</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <input type="text" class="form-control" placeholder="Search Query" id="friendSearchQuery">
+                            </div>
+                            <div class="mb-3">
+                                <input type="text" class="form-control" placeholder="Your Username" id="friendSearchUsername">
+                            </div>
+                            <button id="searchFriendsBtn" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Search Friends
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="searchFriendsResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Friend -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-success method-badge">POST</span>/api/friends/add</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <form id="addFriendForm">
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Your Username" name="username" required>
+                                </div>
+                                <div class="mb-3">
+                                    <input type="text" class="form-control" placeholder="Friend's Username" name="friend" required>
+                                </div>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-user-plus"></i> Add Friend
+                                </button>
+                            </form>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="addFriendResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Misc Tab -->
+            <div class="tab-pane fade" id="misc">
+                <!-- Get User Info -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-primary method-badge">GET</span>/users</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button id="getUserInfoBtn" class="btn btn-primary">
+                                <i class="fas fa-user"></i> Get User Info
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="userInfoResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Leaderboard -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-primary method-badge">GET</span>/leaderboard</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button id="getLeaderboardBtn" class="btn btn-primary">
+                                <i class="fas fa-trophy"></i> Get Leaderboard
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="leaderboardResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Themes -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-primary method-badge">GET</span>/themes</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button id="getThemesBtn" class="btn btn-primary">
+                                <i class="fas fa-palette"></i> Get Themes
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="themesResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Get Mapbox Key -->
+                <div class="endpoint-section">
+                    <h4><span class="badge bg-primary method-badge">GET</span>/api/mapbox-key</h4>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button id="getMapboxKeyBtn" class="btn btn-primary">
+                                <i class="fas fa-map"></i> Get Mapbox Key
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Response:</h6>
+                            <div id="mapboxKeyResponse" class="response-area">Response will appear here...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
